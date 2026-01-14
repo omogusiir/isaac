@@ -24,6 +24,19 @@ jobs:
             exit 1
           when: on_fail                 # Even if the job fails, continue to the next stages
 
+  zap_baseline:
+    machine: true
+    steps:
+      - checkout
+
+      - run: |
+          docker pull hysnsec/zap:2.16.1
+          docker run --user root --rm -v $(pwd):/zap/wrk:rw -w /zap hysnsec/zap:2.16.1 zap-baseline.py -t https://prod-zh4uhzk4.lab.practical-devsecops.training -J zap-output.json || true
+
+      - store_artifacts:
+          path: zap-output.json
+          destination: zap-artifact
+
   prod:
     docker:
       - image: cimg/base:stable
@@ -36,7 +49,17 @@ workflows:
   django:
     jobs:
       - build
-      - test
-      - integration
+      - test:
+          requires:
+            - build
+      - integration:
+          requires:
+            - test
+      - zap_baseline:
+          requires:
+            - integration
       - prod:
           type: approval
+          requires:
+            - zap_baseline
+      
